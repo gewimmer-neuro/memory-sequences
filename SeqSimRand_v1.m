@@ -1,11 +1,11 @@
-% TrySeqSim.m
+% SeqSimRand_v1.m
 % 
-% YL, GEW 2019
+% Yunzhe Liu, G. Elliott Wimmer 2019
 % 
 % simulate data and test for sequenceness relationship to behavior given
 % noise input
-
-
+% 
+% 
 % SeqSimRand.m
 % 
 % v0:  initial version
@@ -16,11 +16,9 @@
 %% initial set up
 clear
 
-load simrandall_ac65_tstart40ms_p1p1_rand7
-
 % set number of simulations
-nsim =           2;
-simstart =       2;
+nsim =        1000;
+simstart =       1;
 fprintf(['\n' 'Running ' num2str(nsim) ' simulations.' '\n\n'])
 
 
@@ -33,23 +31,22 @@ cd(analysisdir);
 ncat =           6;
 nstate =         4; % for transition matrix calculation
 nepi =           8; % 8 episodes
-ntrials    =   220; % even number of trials
+ntrials =      220; % even number of trials
 nTr =      ntrials;
-
 maxLag =        60; % for sim, evaluate cross-correlation up to 600 ms
 maxLagwin =     35; % actual window of 350 ms is checked
 nSensors =     273; % 275-2 missing
 nTrainPerStim = 18; % how many training examples for each stimulus
 nNullExamples = nTrainPerStim*ncat; % how many null examples to use
-nSamples =     353; % 3.5 sec of unlabelled data to predict
+nSamples =     353; % (3.67 - 0.160 s) unlabelled data to predict
 
 %%% set l1 param
-l1param =        2; % fix at 2...
+l1param =        2; % fix at 2
 fprintf(['\nL1param = ' num2str(l1param) ' \n'])
 
 %%% set number of subjects and regular-perf group
-nSubj =         25;
-nSubjincl =     18; % use 18 regular-perf in regressions 
+nSubj =         25; % 25
+nSubjincl =     18; % use 18 regular-performing subjects in regressions 
 fprintf(['\n' 'Running simulated n=' num2str(nSubj) '.' '\n'])
 
 
@@ -140,10 +137,8 @@ for iP = simstart:nsim
     clear subjtrials
     clear subjgroup
     
-    % set vector for later inclusion in correct/incorrect regression analysis
-    subjincl = 0;
     
-    
+    % loop across subjects
     for iSj=1:nSubj
         
         
@@ -261,7 +256,7 @@ for iP = simstart:nsim
                 T2 = T1'; % backwards is transpose of forwards
                 
                 % combined fwd and bkw sequenceness in the same regression model
-                bbb=pinv([T1(:) T2(:) squash(eye(nstate))])*(betasnbins64'); % no constant *default*
+                bbb=pinv([T1(:) T2(:) squash(eye(nstate))])*(betasnbins64');
                 % do z-score
                 sf{iSj}(iTr,2:end)=zscore(bbb(1,:));
                 sb{iSj}(iTr,2:end)=zscore(bbb(2,:));
@@ -280,24 +275,18 @@ for iP = simstart:nsim
         sb = cell2mat(sb);
     end
     
-    % mean-correct for multilevel regressions
+    % extract and  mean-correct for multilevel regressions
     sftemp = [];
     sftemp0 = [];
     for iSj = 1:nSubj
+        % forward
         temp = sfcell{iSj};
         sftemp = [sftemp; temp];
-        % mean-correct
         temp = temp-nanmean(temp);
         sftemp0 = [sftemp0; temp];
-    end
-    clear temp
-    % mean-correct for multilevel regressions
-    sbtemp = [];
-    sbtemp0 = [];
-    for iSj = 1:nSubj
+        % backward
         temp = sbcell{iSj};
         sbtemp = [sbtemp; temp];
-        % mean-correct
         temp = temp-nanmean(temp);
         sbtemp0 = [sbtemp0; temp];
     end
@@ -318,7 +307,7 @@ for iP = simstart:nsim
         dtpdiffbefore(iSj,:) = nanmean(sdiffall(correct==1 & afterbefore==-1 & subj==subjlist(iSj),:));
     end
     
-    % get leave-one-out cross-validation peak timepoint per subject
+    %% get leave-one-out cross-validation peak timepoint per subject
     maxtime = 35;
     tpstart = 5; % 5 = 40 ms lag!
     dtpxmean = NaN(nSubj,maxtime);
@@ -341,7 +330,7 @@ for iP = simstart:nsim
         dtppeak = [dtppeak; [peakfwd peakbkw]];
     end
     
-    % and get max abs lag
+    % get max abs lag
     dtptemp = dtpdiffafter(:,1:maxtime);
     dtptemp(:,1:tpstart-1) = NaN;
     dtpxmean = abs(nanmean(dtptemp));
@@ -351,7 +340,7 @@ for iP = simstart:nsim
     dtppeakmaxtime(:,1) = maxpeak*10;
     
     
-    % construct data table for multilevel regression
+    %% construct data table for multilevel regression
     data = table(subj, grouplow, correct, afterbefore, dtppeak(:,1), dtppeak(:,2));
     % add labels to table
     data.Properties.VariableNames{1} = 'subj';
@@ -365,25 +354,23 @@ for iP = simstart:nsim
     dafter = data(data.afterbefore==1,:);
     dbefore = data(data.afterbefore==-1,:);
     % get after condition in regular performance after group
-    % get before condition in regular performance before group
     aNafter = dafter(dafter.grouplow>0,:);
+    % get before condition in regular performance before group
     bNbefore = dbefore(dbefore.grouplow>0,:);
     
-    % run multilevel regressions (roughly equivalent to primary models run in R; note that R is more reliable for precise stats)
+    %% run multilevel regressions (roughly equivalent to primary models run in R; note that R is more reliable for precise stats)
     disp('fitting after model')
     lmea = fitglme(aNafter,'acc ~ seqfwd + seqbkw + (1 | subj) + (seqfwd | subj) + (seqbkw | subj)');
     disp('fitting before model')
     lmeb = fitglme(bNbefore,'acc ~ seqfwd + seqbkw + (1 | subj) + (seqfwd | subj) + (seqbkw | subj)');
-    
+    % extract coefficients
     lmeacoef = dataset2cell(lmea.Coefficients);
     lmebcoef = dataset2cell(lmeb.Coefficients);
-    
     % store p-values from after and before models
     pvala(iP,1:2) = [lmeacoef{3,6} lmeacoef{4,6}];
     pvalb(iP,1:2) = [lmebcoef{3,6} lmebcoef{4,6}];
     
-    
-    %%% get simulated individual difference correlations
+    %% get simulated individual difference correlations
     memperf = memperf/max(memperf);
     dtpinddifflosoa = NaN(nSubj,1);
     dtpinddifflosob = NaN(nSubj,1);
@@ -413,12 +400,13 @@ for iP = simstart:nsim
     dtpdiffaftersim(iP,:,:) = dtpdiffafter;
     dtpdiffbeforesim(iP,:,:) = dtpdiffbefore;
     
-    % optional:  save per iteration
+    %% optional:  save per iteration
     save(['simrandall_ac65_tstart' num2str((tpstart-1)*10) 'ms_p1p' num2str(iP) '_rand' num2str(round(rand,2)*100)],'pvala','pvalb','simpeaklosotime','simpeakmaxtime','dtpdiffaftersim','dtpdiffbeforesim','corrinddifflosoa','corrinddifflosob','corrinddiffmaxa','corrinddiffmaxb','memperf');
 end
 
 
 toc
 
+% save
 save(['simall_full_ac65_tstart' num2str((tpstart-1)*10) 'ms_rand' num2str(round(rand,2)*100)],'pvala','pvalb','simpeaklosotime','simpeakmaxtime','dtpdiffaftersim','dtpdiffbeforesim','corrinddifflosoa','corrinddifflosob','corrinddiffmaxa','corrinddiffmaxb','memperf');
 
