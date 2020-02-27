@@ -4,6 +4,6 @@ Code accompanying the paper: Wimmer, G. E., Liu, Y., Vehar, N., Behrens, T. E., 
 # memory-sequences
 The simulation code for the whole analysis pipeline is located in
 
-``` SeqBehavSim.m ```
+``` SeqSimRand_v1.m ```
 
 This is to determine the empirical null distrbution for "before" and "after" condition separately, and to test for sequenceness relationship to behavior given noise input.
