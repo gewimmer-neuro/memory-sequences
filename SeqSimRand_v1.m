@@ -16,10 +16,11 @@
 %% initial set up
 clear
 
+load simrandall_ac65_tstart40ms_p1p1_rand7
 
 % set number of simulations
-nsim =           1;
-simstart =       1;
+nsim =           2;
+simstart =       2;
 fprintf(['\n' 'Running ' num2str(nsim) ' simulations.' '\n\n'])
 
 
@@ -307,6 +308,7 @@ for iP = simstart:nsim
     
     % get fwd-bkw sequenceness measure per trial
     sdiffall = sftemp-sbtemp;
+    sdiffall = sdiffall(:,1:maxLagwin+1);
     
     % get mean seq per subject for calculating peak after condition correct trial replay
     dtpdiffafter = NaN(nSubj,maxLagwin+1);
@@ -339,7 +341,7 @@ for iP = simstart:nsim
         dtppeak = [dtppeak; [peakfwd peakbkw]];
     end
     
-    % AND get max
+    % and get max abs lag
     dtptemp = dtpdiffafter(:,1:maxtime);
     dtptemp(:,1:tpstart-1) = NaN;
     dtpxmean = abs(nanmean(dtptemp));
