@@ -6,4 +6,4 @@ The simulation code for the whole analysis pipeline is located in
 
 ``` SeqSimRand_v1.m ```
 
-This is to determine the empirical null distrbution for "before" and "after" condition separately, and to test for sequenceness relationship to behavior given noise input.
+The simulation is used to determine the empirical null distrbution (for the "after" and "before" conditions) for the relationship between sequenceness and memory retrieval success given noise input.
