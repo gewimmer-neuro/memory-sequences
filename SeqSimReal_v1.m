@@ -15,7 +15,7 @@ clear
 maxLag =        31; % 31 = 350 ms lag
 
 % set number of simulations
-nsim =        1000;
+nsim =       10000;
 startsim =       1;
 % load in intermediate file if starting from >1
 if startsim>1
@@ -122,8 +122,13 @@ for iP = startsim:nsim
         
         dtppeaktime(iSj,1) = subjpeak(1)*10;
         
-        peakfwd = nanmean(sfmeancorr(subjall==subjlist(iSj),subjpeak:subjpeak+2),2);
-        peakbkw = nanmean(sbmeancorr(subjall==subjlist(iSj),subjpeak:subjpeak+2),2);
+        if subjpeak==0
+            subjlagrange = subjpeak+1:subjpeak+2;
+        else
+            subjlagrange = subjpeak:subjpeak+2;
+        end
+        peakfwd = nanmean(sfmeancorr(subjall==subjlist(iSj),subjlagrange),2);
+        peakbkw = nanmean(sbmeancorr(subjall==subjlist(iSj),subjlagrange),2);
         
         dtppeak = [dtppeak; [peakfwd peakbkw]];
     end
