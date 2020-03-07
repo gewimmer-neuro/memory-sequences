@@ -106,7 +106,7 @@ for iP = startsim:nsim
     %% get leave-one-subject-out (LOSO) cross-validation peak timepoint per subject
     maxtime = 31; % 31 = 350 ms lag
     tpstart = 1; % 1 = 40 ms lag
-    tlagbuffer = 3;
+    tlagbuffer = 4;
     dtpxmean = NaN(nSubj,maxtime);
     dtppeaktime = NaN(nSubj,1);
     dtppeak = [];
@@ -172,15 +172,15 @@ for iP = startsim:nsim
     end
     
     %% run inddiff regressions
-    [rafter, pafter] = corr(n25_perfafter,dtcorrinddifflosoa);
-    [rbefore, pbefore] = corr(n25_perfbefore,dtcorrinddifflosob);
-    corrinddifflosoa(iP,1:2) = [rafter pafter];
-    corrinddifflosob(iP,1:2) = [rbefore pbefore];
+    [rafter, pafter] = corrcoef(n25_perfafter,dtcorrinddifflosoa);
+    [rbefore, pbefore] = corrcoef(n25_perfbefore,dtcorrinddifflosob);
+    corrinddifflosoa(iP,1:2) = [rafter(2) pafter(2)];
+    corrinddifflosob(iP,1:2) = [rbefore(2) pbefore(2)];
     
-    [rafter, pafter] = corr(n25_perfafter,dtcorrinddiffmaxa);
-    [rbefore, pbefore] = corr(n25_perfbefore,dtcorrinddiffmaxb);
-    corrinddiffmaxa(iP,1:2) = [rafter pafter];
-    corrinddiffmaxb(iP,1:2) = [rbefore pbefore];
+    [rafter, pafter] = corrcoef(n25_perfafter,dtcorrinddiffmaxa);
+    [rbefore, pbefore] = corrcoef(n25_perfbefore,dtcorrinddiffmaxb);
+    corrinddiffmaxa(iP,1:2) = [rafter(2) pafter(2)];
+    corrinddiffmaxb(iP,1:2) = [rbefore(2) pbefore(2)];
     
     
     %% run multilevel regressions
@@ -339,6 +339,3 @@ axes(a) % set original axes as active
 figname = (['mem_realpermloso_permn' num2str(length(pvala))]);
 saveas(gcf,figname,'fig')
 saveas(gcf,figname,'png')
-
-
-
