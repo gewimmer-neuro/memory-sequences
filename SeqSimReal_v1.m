@@ -170,10 +170,21 @@ for iP = startsim:nsim
     dtcorrinddiffmaxa = NaN(nSubj,1);
     dtcorrinddiffmaxb = NaN(nSubj,1);
     for iSj = 1:nSubj
-        dtcorrinddifflosoa(iSj,1) = nanmean(dtpdiffafter(iSj,(dtppeaktime(iSj)/10):(dtppeaktime(iSj)/10)+2),2);
-        dtcorrinddifflosob(iSj,1) = nanmean(dtpdiffbefore(iSj,(dtppeaktime(iSj)/10):(dtppeaktime(iSj)/10)+2),2);
-        dtcorrinddiffmaxa(iSj,1) = nanmean(dtpdiffafter(iSj,(dtppeakmaxtime/10):(dtppeakmaxtime/10)+2),2);
-        dtcorrinddiffmaxb(iSj,1) = nanmean(dtpdiffbefore(iSj,(dtppeakmaxtime/10):(dtppeakmaxtime/10)+2),2);
+        subjpeak = dtppeaktime(iSj)/10;
+        if subjpeak==0
+            subjlagrange = subjpeak+1:subjpeak+2;
+        else
+            subjlagrange = subjpeak:subjpeak+2;
+        end
+        dtcorrinddifflosoa(iSj,1) = nanmean(dtpdiffafter(iSj,subjlagrange),2);
+        dtcorrinddifflosob(iSj,1) = nanmean(dtpdiffbefore(iSj,subjlagrange),2);
+        if dtppeakmaxtime==0
+            grouplagrange = dtppeakmaxtime/10+1:dtppeakmaxtime/10+2;
+        else
+            grouplagrange = dtppeakmaxtime/10:dtppeakmaxtime/10+2;
+        end
+        dtcorrinddiffmaxa(iSj,1) = nanmean(dtpdiffafter(iSj,grouplagrange),2);
+        dtcorrinddiffmaxb(iSj,1) = nanmean(dtpdiffbefore(iSj,grouplagrange),2);
     end
     
     %% run inddiff regressions
