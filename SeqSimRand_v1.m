@@ -18,7 +18,7 @@
 clear
 
 % set number of simulations
-nsim =         100;
+nsim =        1000;
 simstart =       1;
 fprintf(['\n' 'Running ' num2str(nsim) ' simulations.' '\n\n'])
 
@@ -443,20 +443,15 @@ end
 
 % empirical permutation-derived adjusted 5% threshold
 threshadjinddiffafter = prctile(corrinddiffmaxa(:,2),5);
-% 25k:  0.0399
 threshadjinddiffbefore = prctile(corrinddiffmaxb(:,2),5);
-% 25k:  0.0507
 
 % empirical permutation-derived false positive rate
 fposrateinddiffafter = nanmean(corrinddiffmaxa(:,2)<0.05);
-% 25k:  0.0582
 fposrateinddiffbefore = nanmean(corrinddiffmaxb(:,2)<0.05);
-% 25k:  0.0488
 
 % likelihood of finding a difference between after and before correlations >= 0.8
 pvalinddiffconj = abs(corrinddiffmaxa(:,1)-corrinddiffmaxb(:,1))>=0.8; % actual data correlation diff ~ 0.8 (data: r>0.40, r>-0.40)
 pvalinddiffconj = sum(pvalinddiffconj)./length(pvalinddiffconj);
-% 25k:  0.0076
 
 
 
@@ -480,7 +475,7 @@ fposratefwdbkwbefore = nanmean(pvalb(:)<0.05);
 
 
 %% save
-save(['simall_full_ac65_rand' num2str(round(rand,2)*100)],'pval*','tstat*','simpeaklosotime','simpeakmaxtime','dtpdiffaftersim','dtpdiffbeforesim','corrinddiff*','thresh*','fpos*','memperf');
+save(['simrandall_full_ac65_rand' num2str(round(rand,2)*100)],'pval*','tstat*','simpeaklosotime','simpeakmaxtime','dtpdiffaftersim','dtpdiffbeforesim','corrinddiff*','thresh*','fpos*','memperf');
 
 
 
