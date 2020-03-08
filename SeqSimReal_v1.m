@@ -1,10 +1,16 @@
-% seqSimReal.m
+% SeqSimReal.m
 % 
 % G. Elliott Wimmer, Yunzhe Liu 2020
 % 
 % permute data labels to compute false positive rate for sequenceness
 % relationship to behavior given real sequenceness input
-
+% 
+% required data files:
+% seq_all_xp12_nocon_sfsb_n25 % nsubj*ntrials length matrices of sequenceness values (40ms-360ms lag). sf, sb raw; sfmeancorr, sbmeancorr mean-corrected by column for regressions
+% seq_all_behavior % nsubj*ntrials length matrices of behavior
+% seq_all_inddiff % nsubj length matrices of mean behavior and group membership
+% 
+% requires fitglme function
 
 %% initial set up
 clear
@@ -122,6 +128,7 @@ for iP = startsim:nsim
         
         dtppeaktime(iSj,1) = subjpeak(1)*10;
         
+        % get peak value +-10 ms to data table (subjpeak is -10 ms before actual peak)
         if subjpeak==0
             subjlagrange = subjpeak+1:subjpeak+2;
         else
@@ -130,6 +137,7 @@ for iP = startsim:nsim
         peakfwd = nanmean(sfmeancorr(subjall==subjlist(iSj),subjlagrange),2);
         peakbkw = nanmean(sbmeancorr(subjall==subjlist(iSj),subjlagrange),2);
         
+        % concat each subject's peakfwd and peakbkw sequenceness onto group
         dtppeak = [dtppeak; [peakfwd peakbkw]];
     end
     
@@ -143,7 +151,7 @@ for iP = startsim:nsim
     maxpeak = maxpeak - 1;
     dtppeakmaxtime(:,1) = maxpeak*10;
     
-    %% create data table for fitglme
+    %% create data table for multilevel regression (fitglme)
     data = array2table([dataall dtppeak correctall]); % concat behavior, seq peak, and (permuted) correct label
     data.Properties.VariableNames{1} = 'subj';
     data.Properties.VariableNames{2} = 'groupafter';
@@ -164,11 +172,11 @@ for iP = startsim:nsim
     aNafter = dafter(dafter.groupafter>0,:);
     bNbefore = dbefore(dbefore.groupbefore>0,:);
     
-    % get dat for inddiff regressions
-    dtcorrinddifflosoa = NaN(nSubj,1);
-    dtcorrinddifflosob = NaN(nSubj,1);
-    dtcorrinddiffmaxa = NaN(nSubj,1);
-    dtcorrinddiffmaxb = NaN(nSubj,1);
+    %% get dat for inddiff regressions
+    dtpcorrinddifflosoa = NaN(nSubj,1);
+    dtpcorrinddifflosob = NaN(nSubj,1);
+    dtpcorrinddiffmaxa = NaN(nSubj,1);
+    dtpcorrinddiffmaxb = NaN(nSubj,1);
     for iSj = 1:nSubj
         subjpeak = dtppeaktime(iSj)/10;
         if subjpeak==0
@@ -176,27 +184,29 @@ for iP = startsim:nsim
         else
             subjlagrange = subjpeak:subjpeak+2;
         end
-        dtcorrinddifflosoa(iSj,1) = nanmean(dtpdiffafter(iSj,subjlagrange),2);
-        dtcorrinddifflosob(iSj,1) = nanmean(dtpdiffbefore(iSj,subjlagrange),2);
+        dtpcorrinddifflosoa(iSj,1) = nanmean(dtpdiffafter(iSj,subjlagrange),2);
+        dtpcorrinddifflosob(iSj,1) = nanmean(dtpdiffbefore(iSj,subjlagrange),2);
         if dtppeakmaxtime==0
             grouplagrange = dtppeakmaxtime/10+1:dtppeakmaxtime/10+2;
         else
             grouplagrange = dtppeakmaxtime/10:dtppeakmaxtime/10+2;
         end
-        dtcorrinddiffmaxa(iSj,1) = nanmean(dtpdiffafter(iSj,grouplagrange),2);
-        dtcorrinddiffmaxb(iSj,1) = nanmean(dtpdiffbefore(iSj,grouplagrange),2);
+        dtpcorrinddiffmaxa(iSj,1) = nanmean(dtpdiffafter(iSj,grouplagrange),2);
+        dtpcorrinddiffmaxb(iSj,1) = nanmean(dtpdiffbefore(iSj,grouplagrange),2);
     end
     
     %% run inddiff regressions
-    [rafter, pafter] = corrcoef(n25_perfafter,dtcorrinddifflosoa);
-    [rbefore, pbefore] = corrcoef(n25_perfbefore,dtcorrinddifflosob);
-    corrinddifflosoa(iP,1:2) = [rafter(2) pafter(2)];
-    corrinddifflosob(iP,1:2) = [rbefore(2) pbefore(2)];
-    
-    [rafter, pafter] = corrcoef(n25_perfafter,dtcorrinddiffmaxa);
-    [rbefore, pbefore] = corrcoef(n25_perfbefore,dtcorrinddiffmaxb);
+    % max lag preferred
+    [rafter, pafter] = corrcoef(n25_perfafter,dtpcorrinddiffmaxa);
+    [rbefore, pbefore] = corrcoef(n25_perfbefore,dtpcorrinddiffmaxb);
     corrinddiffmaxa(iP,1:2) = [rafter(2) pafter(2)];
     corrinddiffmaxb(iP,1:2) = [rbefore(2) pbefore(2)];
+    
+    % (leave-one-subject-out lag non-preferred)
+    [rafter, pafter] = corrcoef(n25_perfafter,dtpcorrinddifflosoa);
+    [rbefore, pbefore] = corrcoef(n25_perfbefore,dtpcorrinddifflosob);
+    corrinddifflosoa(iP,1:2) = [rafter(2) pafter(2)];
+    corrinddifflosob(iP,1:2) = [rbefore(2) pbefore(2)];
     
     
     %% run multilevel regressions
@@ -301,7 +311,7 @@ colorblue = [0 0 255]/255;
 colorcyan = [0 255 200]/255;
 shadedErrorBar(pVal, dataafter, dataafter/100000,{'color', colorcyan, 'LineWidth', 4},0); hold on
 shadedErrorBar(pVal, databefore, databefore/100000,{'color', colorblue, 'LineWidth', 4},0); hold on
-title(['a+b (fwd-bkw) ' num2str(length(corrinddiffmaxa)) ' inddiff max realperm; <5% after ' num2str(round(mean(corrinddiffmaxa(:,2)<0.05),4)) '; before ' num2str(round(mean(corrinddiffmaxb(:,2)<0.05),4))]);
+title(['a+b (fwd-bkw) ' num2str(length(corrinddiffmaxa)) ' inddiff realperm; <5% after ' num2str(round(mean(corrinddiffmaxa(:,2)<0.05),4)) '; before ' num2str(round(mean(corrinddiffmaxb(:,2)<0.05),4))]);
 xlabel('p-value bin')
 ylabel('probability')
 set(gca,'FontSize',18)
@@ -355,3 +365,4 @@ axes(a) % set original axes as active
 figname = (['mem_realpermloso_permn' num2str(length(pvala))]);
 saveas(gcf,figname,'fig')
 saveas(gcf,figname,'png')
+

@@ -1,10 +1,11 @@
 % SeqSimRand_v1.m
 % 
-% Yunzhe Liu, G. Elliott Wimmer 2019
+% G. Elliott Wimmer, Yunzhe Liu 2019
 % 
 % simulate data and test for sequenceness relationship to behavior given
 % noise input
 % 
+% requires fitglme function
 % 
 % SeqSimRand.m
 % 
@@ -17,7 +18,7 @@
 clear
 
 % set number of simulations
-nsim =        1000;
+nsim =         100;
 simstart =       1;
 fprintf(['\n' 'Running ' num2str(nsim) ' simulations.' '\n\n'])
 
@@ -51,10 +52,10 @@ fprintf(['\n' 'Running simulated n=' num2str(nSubj) '.' '\n'])
 
 
 % set subject variable
-subj = [];
+subjall = [];
 for iSj = 1:nSubj
     subjtrials = ones(ntrials,1)*iSj;
-    subj = [subj; subjtrials];
+    subjall = [subjall; subjtrials];
 end
 clear subjtrials
 
@@ -91,6 +92,8 @@ epi2state = epi2state(1:ntrials);
 % set storage
 pvala = NaN(nsim,2);
 pvalb = NaN(nsim,2);
+tstata = NaN(nsim,2);
+tstatb = NaN(nsim,2);
 corrinddifflosoa = NaN(nsim,2);
 corrinddifflosob = NaN(nsim,2);
 corrinddiffmaxa = NaN(nsim,2);
@@ -267,6 +270,8 @@ for iP = simstart:nsim
     end
     
     
+    save tempsimall
+    
     %% extract sequenceness
     if iscell(sf) && iscell(sb)
         sfcell = sf;
@@ -277,23 +282,25 @@ for iP = simstart:nsim
     
     % extract and  mean-correct for multilevel regressions
     sftemp = [];
-    sftemp0 = [];
+    sfmeancorr = [];
+    sbtemp = [];
+    sbmeancorr = [];
     for iSj = 1:nSubj
         % forward
         temp = sfcell{iSj};
         sftemp = [sftemp; temp];
         temp = temp-nanmean(temp);
-        sftemp0 = [sftemp0; temp];
+        sfmeancorr = [sfmeancorr; temp];
         % backward
         temp = sbcell{iSj};
         sbtemp = [sbtemp; temp];
         temp = temp-nanmean(temp);
-        sbtemp0 = [sbtemp0; temp];
+        sbmeancorr = [sbmeancorr; temp];
     end
     clear temp
     
     % get subject list
-    subjlist = unique(subj);
+    subjlist = unique(subjall);
     
     % get fwd-bkw sequenceness measure per trial
     sdiffall = sftemp-sbtemp;
@@ -303,13 +310,13 @@ for iP = simstart:nsim
     dtpdiffafter = NaN(nSubj,maxLagwin+1);
     dtpdiffbefore = NaN(nSubj,maxLagwin+1);
     for iSj = 1:nSubj
-        dtpdiffafter(iSj,:) = nanmean(sdiffall(correct==1 & afterbefore==1 & subj==subjlist(iSj),:));
-        dtpdiffbefore(iSj,:) = nanmean(sdiffall(correct==1 & afterbefore==-1 & subj==subjlist(iSj),:));
+        dtpdiffafter(iSj,:) = nanmean(sdiffall(correct==1 & afterbefore==1 & subjall==subjlist(iSj),:));
+        dtpdiffbefore(iSj,:) = nanmean(sdiffall(correct==1 & afterbefore==-1 & subjall==subjlist(iSj),:));
     end
     
     %% get leave-one-out cross-validation peak timepoint per subject
     maxtime = 35;
-    tpstart = 5; % 5 = 40 ms lag!
+    tpstart = 5; % 5 = 40 ms lag
     dtpxmean = NaN(nSubj,maxtime);
     dtppeaklosotime = NaN(nSubj,1);
     dtppeak = [];
@@ -322,15 +329,21 @@ for iP = simstart:nsim
         % timelag -1 to get actual time lag, but account for this later
         subjpeak = (find(dtpxmean(iSj,:)==max(dtpxmean(iSj,tpstart:maxtime)))-1);
         dtppeaklosotime(iSj,1) = subjpeak(1)*10;
+        
         % get peak value +-10 ms to data table (subjpeak is -10 ms before actual peak)
-        peakfwd = nanmean(sftemp0(subj==subjlist(iSj),subjpeak:subjpeak+2),2);
-        peakbkw = nanmean(sbtemp0(subj==subjlist(iSj),subjpeak:subjpeak+2),2);
+        if subjpeak==4 % subjpeak of 4 = 30ms; only start at 40ms
+            subjlagrange = subjpeak+1:subjpeak+2;
+        else
+            subjlagrange = subjpeak:subjpeak+2;
+        end
+        peakfwd = nanmean(sfmeancorr(subjall==subjlist(iSj),subjlagrange),2);
+        peakbkw = nanmean(sbmeancorr(subjall==subjlist(iSj),subjlagrange),2);
         
         % concat each subject's peakfwd and peakbkw sequenceness onto group
         dtppeak = [dtppeak; [peakfwd peakbkw]];
     end
     
-    % get max abs lag
+    %% get max abs lag for individual difference correlations
     dtptemp = dtpdiffafter(:,1:maxtime);
     dtptemp(:,1:tpstart-1) = NaN;
     dtpxmean = abs(nanmean(dtptemp));
@@ -340,8 +353,8 @@ for iP = simstart:nsim
     dtppeakmaxtime(:,1) = maxpeak*10;
     
     
-    %% construct data table for multilevel regression
-    data = table(subj, grouplow, correct, afterbefore, dtppeak(:,1), dtppeak(:,2));
+    %% create data table for multilevel regression (fitglme)
+    data = table(subjall, grouplow, correct, afterbefore, dtppeak(:,1), dtppeak(:,2));
     % add labels to table
     data.Properties.VariableNames{1} = 'subj';
     data.Properties.VariableNames{2} = 'grouplow';
@@ -358,7 +371,46 @@ for iP = simstart:nsim
     % get before condition in regular performance before group
     bNbefore = dbefore(dbefore.grouplow>0,:);
     
+    %% get data for inddiff regressions
+    memperf = memperf/max(memperf);
+    dtpcorrinddifflosoa = NaN(nSubj,1);
+    dtpcorrinddifflosob = NaN(nSubj,1);
+    dtpcorrinddiffmaxa = NaN(nSubj,1);
+    dtpcorrinddiffmaxb = NaN(nSubj,1);
+    for iSj = 1:nSubj
+        if subjpeak==4 % subjpeak of 4 = 30ms; only start at 40ms
+            subjlagrange = subjpeak+1:subjpeak+2;
+        else
+            subjlagrange = subjpeak:subjpeak+2;
+        end
+        dtpcorrinddifflosoa(iSj,1) = nanmean(dtpdiffafter(iSj,subjlagrange),2);
+        dtpcorrinddifflosob(iSj,1) = nanmean(dtpdiffbefore(iSj,subjlagrange),2);
+        if (dtppeakmaxtime/10)==4 % grouppeak of 4 = 30ms; only start at 40ms
+            grouplagrange = dtppeakmaxtime/10+1:dtppeakmaxtime/10+2;
+        else
+            grouplagrange = dtppeakmaxtime/10:dtppeakmaxtime/10+2;
+        end
+        dtpcorrinddiffmaxa(iSj,1) = nanmean(dtpdiffafter(iSj,grouplagrange),2);
+        dtpcorrinddiffmaxb(iSj,1) = nanmean(dtpdiffbefore(iSj,grouplagrange),2);
+    end
+    
+    %% run inddiff regressions; for sim assume after performance = before performance
+    % max lag preferred
+    [rafter, pafter] = corrcoef(memperf,dtpcorrinddiffmaxa);
+    [rbefore, pbefore] = corrcoef(memperf,dtpcorrinddiffmaxb);
+    corrinddiffmaxa(iP,1:2) = [rafter(2) pafter(2)];
+    corrinddiffmaxb(iP,1:2) = [rbefore(2) pbefore(2)];
+    % (leave-one-subject-out lag non-preferred)
+    [rafter, pafter] = corrcoef(memperf,dtpcorrinddifflosoa);
+    [rbefore, pbefore] = corrcoef(memperf,dtpcorrinddifflosob);
+    corrinddifflosoa(iP,1:2) = [rafter(2) pafter(2)];
+    corrinddifflosob(iP,1:2) = [rbefore(2) pbefore(2)];
+    
+    
     %% run multilevel regressions (roughly equivalent to primary models run in R; note that R is more reliable for precise stats)
+    rowstat =    3;
+    colpval =    6;
+    coltstat =   4;
     disp('fitting after model')
     lmea = fitglme(aNafter,'acc ~ seqfwd + seqbkw + (1 | subj) + (seqfwd | subj) + (seqbkw | subj)');
     disp('fitting before model')
@@ -367,32 +419,11 @@ for iP = simstart:nsim
     lmeacoef = dataset2cell(lmea.Coefficients);
     lmebcoef = dataset2cell(lmeb.Coefficients);
     % store p-values from after and before models
-    pvala(iP,1:2) = [lmeacoef{3,6} lmeacoef{4,6}];
-    pvalb(iP,1:2) = [lmebcoef{3,6} lmebcoef{4,6}];
+    pvala(iP,1:2) = [lmeacoef{rowstat,colpval} lmeacoef{rowstat+1,colpval}];
+    pvalb(iP,1:2) = [lmebcoef{rowstat,colpval} lmebcoef{rowstat+1,colpval}];
     
-    %% get simulated individual difference correlations
-    memperf = memperf/max(memperf);
-    dtpinddifflosoa = NaN(nSubj,1);
-    dtpinddifflosob = NaN(nSubj,1);
-    dtpinddiffmaxa = NaN(nSubj,1);
-    dtpinddiffmaxb = NaN(nSubj,1);
-    for iSj = 1:nSubj
-        dtpinddifflosoa(iSj,1) = nanmean(dtpdiffafter(iSj,(dtppeaklosotime(iSj)/10):(dtppeaklosotime(iSj)/10)+2),2);
-        dtpinddifflosob(iSj,1) = nanmean(dtpdiffbefore(iSj,(dtppeaklosotime(iSj)/10):(dtppeaklosotime(iSj)/10)+2),2);
-        dtpinddiffmaxa(iSj,1) = nanmean(dtpdiffafter(iSj,(dtppeakmaxtime/10):(dtppeakmaxtime/10)+2),2);
-        dtpinddiffmaxb(iSj,1) = nanmean(dtpdiffbefore(iSj,(dtppeakmaxtime/10):(dtppeakmaxtime/10)+2),2);
-    end
-    % loso
-    [rafter, pafter] = corr(memperf,dtpinddifflosoa);
-    [rbefore, pbefore] = corr(memperf,dtpinddifflosob);
-    corrinddifflosoa(iP,1:2) = [rafter pafter];
-    corrinddifflosob(iP,1:2) = [rbefore pbefore];
-    % max
-    [rafter, pafter] = corr(memperf,dtpinddiffmaxa);
-    [rbefore, pbefore] = corr(memperf,dtpinddiffmaxb);
-    corrinddiffmaxa(iP,1:2) = [rafter pafter];
-    corrinddiffmaxb(iP,1:2) = [rbefore pbefore];
-    
+    tstata(iP,1:2) = [lmeacoef{rowstat,coltstat} lmeacoef{rowstat+1,coltstat}];
+    tstatb(iP,1:2) = [lmebcoef{rowstat,coltstat} lmebcoef{rowstat+1,coltstat}];
     
     % optional:  store selected per-subject peak lag and mean fwd-bkw difference
     simpeaklosotime(iP,:) = dtppeaklosotime';
@@ -401,12 +432,126 @@ for iP = simstart:nsim
     dtpdiffbeforesim(iP,:,:) = dtpdiffbefore;
     
     %% optional:  save per iteration
-    save(['simrandall_ac65_tstart' num2str((tpstart-1)*10) 'ms_p1p' num2str(iP) '_rand' num2str(round(rand,2)*100)],'pvala','pvalb','simpeaklosotime','simpeakmaxtime','dtpdiffaftersim','dtpdiffbeforesim','corrinddifflosoa','corrinddifflosob','corrinddiffmaxa','corrinddiffmaxb','memperf');
+%     if rem(iP,500)
+        save(['simrandall_ac65_p1p' num2str(iP) '_rand' num2str(round(rand,2)*100)],'pval*','tstat*','simpeaklosotime','simpeakmaxtime','dtpdiffaftersim','dtpdiffbeforesim','corrinddiff*','memperf');
+%     end
+    toc
 end
 
 
-toc
+%% individual differences analyses:  compute false positive rate and adjusted 5% threshold
 
-% save
-save(['simall_full_ac65_tstart' num2str((tpstart-1)*10) 'ms_rand' num2str(round(rand,2)*100)],'pvala','pvalb','simpeaklosotime','simpeakmaxtime','dtpdiffaftersim','dtpdiffbeforesim','corrinddifflosoa','corrinddifflosob','corrinddiffmaxa','corrinddiffmaxb','memperf');
+% empirical permutation-derived adjusted 5% threshold
+threshadjinddiffafter = prctile(corrinddiffmaxa(:,2),5);
+% 25k:  0.0399
+threshadjinddiffbefore = prctile(corrinddiffmaxb(:,2),5);
+% 25k:  0.0507
 
+% empirical permutation-derived false positive rate
+fposrateinddiffafter = nanmean(corrinddiffmaxa(:,2)<0.05);
+% 25k:  0.0582
+fposrateinddiffbefore = nanmean(corrinddiffmaxb(:,2)<0.05);
+% 25k:  0.0488
+
+% likelihood of finding a difference between after and before correlations >= 0.8
+pvalinddiffconj = abs(corrinddiffmaxa(:,1)-corrinddiffmaxb(:,1))>=0.8; % actual data correlation diff ~ 0.8 (data: r>0.40, r>-0.40)
+pvalinddiffconj = sum(pvalinddiffconj)./length(pvalinddiffconj);
+% 25k:  0.0076
+
+
+
+%% trial-by-trial analyses:  compute false positive rate and adjusted 5% threshold
+
+% empirical permutation-derived adjusted 5% threshold
+threshadjfwdafter = prctile(pvala(:,1),5);
+threshadjbkwafter = prctile(pvala(:,2),5);
+threshadjfwdbkwafter = (prctile(pvala(:),5));
+threshadjfwdbefore = prctile(pvalb(:,1),5);
+threshadjbkwbefore = prctile(pvalb(:,2),5);
+threshadjfwdbkwbefore = (prctile(pvalb(:),5));
+
+% empirical permutation-derived false positive rate
+fposratefwdafter = nanmean(pvala(:,1)<0.05);
+fposratebkwafter = nanmean(pvala(:,2)<0.05);
+fposratefwdbkwafter = nanmean(pvala(:)<0.05);
+fposratefwdbefore = nanmean(pvalb(:,1)<0.05);
+fposratebkwbefore = nanmean(pvalb(:,2)<0.05);
+fposratefwdbkwbefore = nanmean(pvalb(:)<0.05);
+
+
+%% save
+save(['simall_full_ac65_rand' num2str(round(rand,2)*100)],'pval*','tstat*','simpeaklosotime','simpeakmaxtime','dtpdiffaftersim','dtpdiffbeforesim','corrinddiff*','thresh*','fpos*','memperf');
+
+
+
+%% plot individual differences false positive rate (% of results per 0.05 bin)
+dataafter = corrinddiffmaxa(:,2);
+databefore = corrinddiffmaxb(:,2);
+dataafter = hist(dataafter,20)./length(dataafter);
+databefore = hist(databefore,20)./length(databefore);
+
+figure,
+x0=50;
+y0=50;
+width=800;
+height=540;
+set(gcf,'units','points','position',[x0,y0,width,height]);
+pVal = 0.05:0.05:1;
+colorblue = [0 0 255]/255;
+colorcyan = [0 255 200]/255;
+shadedErrorBar(pVal, dataafter, dataafter/100000,{'color', colorcyan, 'LineWidth', 4},0); hold on
+shadedErrorBar(pVal, databefore, databefore/100000,{'color', colorblue, 'LineWidth', 4},0); hold on
+title(['a+b (fwd-bkw) ' num2str(length(corrinddiffmaxa)) ' inddiff randperm; <5% after ' num2str(round(mean(corrinddiffmaxa(:,2)<0.05),4)) '; before ' num2str(round(mean(corrinddiffmaxb(:,2)<0.05),4))]);
+xlabel('p-value bin')
+ylabel('probability')
+set(gca,'FontSize',18)
+hline = refline([0 0.05]);
+hline.Color = 'black';
+xlim([0.05 1])
+set(gca,'Xtick',0.05:0.05:1)
+xtickangle(gca,-45)
+ylim([0 .1])
+a = gca;
+set(a,'box','off','color','none') % set box property to off and remove background color
+b = axes('Position',get(a,'Position'),'box','on','xtick',[],'ytick',[]); % create new, empty axes with box but without ticks
+axes(a) % set original axes as active
+
+figname = (['mem_inddiff_randpermmax_permn' num2str(size(pvala,1))]);
+saveas(gcf,figname,'fig')
+saveas(gcf,figname,'png')
+
+
+
+%% plot trial-by-trial multilevel model false positive rate (% of results per 0.05 bin)
+dataafter = hist(pvala(:),20)./length(pvala(:));
+databefore = hist(pvalb(:),20)./length(pvalb(:));
+
+figure,
+x0=50;
+y0=50;
+width=800;
+height=540;
+set(gcf,'units','points','position',[x0,y0,width,height]);
+pVal = 0.05:0.05:1;
+colorblue = [0 0 255]/255;
+colorcyan = [0 255 200]/255;
+shadedErrorBar(pVal, dataafter, dataafter/100000,{'color', colorcyan, 'LineWidth', 4},0); hold on
+shadedErrorBar(pVal, databefore, databefore/100000,{'color', colorblue, 'LineWidth', 4},0); hold on
+title(['a+b fwd+bkw ' num2str(length(pvala(:,1))) ' randperm; <5% after ' num2str(round(sum(pvala(:)<0.05)/length(pvala(:)),4)) '; before ' num2str(round(sum(pvalb(:)<0.05)/length(pvalb(:)),4))]);
+xlabel('p-value bin')
+ylabel('probability')
+set(gca,'FontSize',18)
+hline = refline([0 0.05]);
+hline.Color = 'black';
+xlim([0.05 1])
+set(gca,'Xtick',0.05:0.05:1)
+xtickangle(gca,-45)
+ylim([0 .1])
+a = gca;
+set(a,'box','off','color','none') % set box property to off and remove background color
+b = axes('Position',get(a,'Position'),'box','on','xtick',[],'ytick',[]); % create new, empty axes with box but without ticks
+axes(a) % set original axes as active
+
+figname = (['mem_randpermloso_permn' num2str(size(pvala,1))]);
+saveas(gcf,figname,'fig')
+saveas(gcf,figname,'png')
