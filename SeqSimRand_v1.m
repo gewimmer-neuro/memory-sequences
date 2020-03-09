@@ -270,8 +270,6 @@ for iP = simstart:nsim
     end
     
     
-    save tempsimall
-    
     %% extract sequenceness
     if iscell(sf) && iscell(sb)
         sfcell = sf;
